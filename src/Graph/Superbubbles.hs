@@ -8,7 +8,6 @@ import qualified Data.Map.Strict as M
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State.Strict
-import Control.Lens
 
 data BubbleError = Loop -- ^ The starting node is in a loop
                  | Tip -- ^ There is a tip dangling under the starting point
@@ -37,19 +36,19 @@ findSuperbubble getChilds getParents start = runExcept (evalStateT go (M.singlet
       case queue of
         [] -> throwError NotFound
         (v:_) -> do
-           at v ?= Visited
-           let vchilds = getChilds v
-           when (null vchilds) (throwError Tip)
-           forM_ vchilds $ \u -> do
-             when (u == start) (throwError Loop)
-             at u ?= Seen
-             let uparents = getParents u
-             pvisited <- M.filterWithKey (\k s -> k `S.member` uparents && s == Visited) <$> get
-             when (M.size pvisited == length uparents) (at u ?= Unvisited)
-           smap <- get
-           case (unvisited smap, M.size (M.filter (== Seen) smap)) of
-             ([t], 0) -> if start `S.member` getChilds t
-                           then throwError Loop
-                           else return t
-             _ -> go
+          modify (M.insert v Visited)
+          let vchilds = getChilds v
+          when (null vchilds) (throwError Tip)
+          forM_ vchilds $ \u -> do
+            when (u == start) (throwError Loop)
+            modify (M.insert u Seen)
+            let uparents = getParents u
+            pvisited <- M.filterWithKey (\k s -> k `S.member` uparents && s == Visited) <$> get
+            when (M.size pvisited == length uparents) (modify (M.insert u Unvisited))
+          smap <- get
+          case (unvisited smap, M.size (M.filter (== Seen) smap)) of
+            ([t], 0) -> if start `S.member` getChilds t
+                          then throwError Loop
+                          else return t
+            _ -> go
 
